@@ -6,7 +6,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "_site"
 BASE = "https://wooagongmae.wooahouse.com"
 SITE = "우아공매"
-NAVER_TOKEN = ""      # 네이버 서치어드바이저 메타태그 값 — 사용자 발급 후 입력
+NAVER_TOKEN = "c598fc73c42775d59e06b23d132551d560bc9129"      # 네이버 서치어드바이저 메타태그 값 — 사용자 발급 후 입력
 esc = html.escape
 
 NAV = [("공매 물건", "/item/"), ("지역별", "/region/"), ("낙찰가율", "/stats/"), ("이번 주 개찰", "/calendar/"), ("공매 가이드", "/guide/")]
