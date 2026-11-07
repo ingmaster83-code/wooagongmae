@@ -1,0 +1,19 @@
+name: Probe Onbid API latency
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Measure latency from the runner
+        env:
+          K: ${{ secrets.DATA_GO_KR_API_KEY }}
+        run: |
+          echo "runner IP: $(curl -s -m 10 https://api.ipify.org || echo unknown)"
+          for i in 1 2 3; do
+            curl -s -o /tmp/r.json -m 90 -w "list call $i: http=%{http_code} time=%{time_total}s size=%{size_download}\n" "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2?serviceKey=${K}&resultType=json&pageNo=1&numOfRows=1&prptDivCd=0007&pvctTrgtYn=N" || echo "curl failed: $?"
+          done
+          head -c 300 /tmp/r.json | sed "s/${K}/***/g"; echo
+          curl -s -o /dev/null -m 90 -w "big call (2000 rows): http=%{http_code} time=%{time_total}s size=%{size_download}\n" "https://apis.data.go.kr/B010003/OnbidRlstListSrvc2/getRlstCltrList2?serviceKey=${K}&resultType=json&pageNo=1&numOfRows=2000&prptDivCd=0007&pvctTrgtYn=N" || echo "big call failed: $?"
+          curl -s -o /dev/null -m 60 -w "stats call: http=%{http_code} time=%{time_total}s\n" "https://apis.data.go.kr/B010003/OnbidClarBidStatsSrvc/getKamcoCltrClarStats?serviceKey=${K}&resultType=json&pageNo=1&numOfRows=5&statsTypeCd=0021&inqPerd=202610" || echo "stats failed: $?"
