@@ -8,6 +8,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      detail_budget:
+        description: '상세 보강 예산(건)'
+        default: '900'
 
 permissions:
   contents: write
@@ -40,11 +44,12 @@ jobs:
 
       - name: 온비드 데이터 수집 (일 상세 보강 예산 900건)
         id: fetch
+        timeout-minutes: 40
         if: github.event_name != 'push' || hashFiles('store/items.json.gz') == ''
         continue-on-error: true
         env:
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
-        run: python scripts/fetch_data.py --detail-budget 900
+        run: python -u scripts/fetch_data.py --detail-budget ${{ github.event.inputs.detail_budget || 900 }}
 
       - name: 사이트 생성
         env:

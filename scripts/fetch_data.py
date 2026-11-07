@@ -2,7 +2,7 @@
 """우아공매 일일 수집: 부동산 물건목록 → 회차 묶기 → 저장소(store/) 갱신 → 상세 보강(일 예산) → 통계·순위.
 사용: python scripts/fetch_data.py [--detail-budget 900] [--stats-months 13] [--skip-list]
 store/items.json.gz {items:{id:item}, meta}   store/stats.json   store/ranks.json   (Actions에서는 data 브랜치에 보관)"""
-import argparse, collections, datetime, gzip, json, pathlib, sys, time
+import argparse, collections, concurrent.futures, datetime, gzip, json, pathlib, sys, time
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import onbid_api as O
@@ -13,6 +13,7 @@ STORE = ROOT / "store"; STORE.mkdir(exist_ok=True)
 KST = datetime.timezone(datetime.timedelta(hours=9))
 PRPT = ["0002", "0004", "0005", "0007", "0010", "0013"]        # 공유·불용품·기타일반·압류·국유·파산
 KEEP_ENDED_DAYS = 90
+DETAIL_THREADS = 4
 
 def now_kst(): return datetime.datetime.now(KST).replace(tzinfo=None)
 
@@ -25,12 +26,14 @@ def save_store(st):
     with gzip.open(STORE / "items.json.gz", "wt", encoding="utf-8", compresslevel=6) as f:
         json.dump(st, f, ensure_ascii=False, separators=(",", ":"))
 
+T0 = time.time()
+
 def fetch_list():
     rows = []
     for pr in PRPT:
         for pv in ("N", "Y"):
             got = O.fetch_all("rlst_list", per=2000, prptDivCd=pr, pvctTrgtYn=pv)
-            rows += got; print("  list", pr, pv, len(got), flush=True)
+            rows += got; print("  list", pr, pv, len(got), "(%.0f초)" % (time.time() - T0), flush=True)
     return rows
 
 LIST_FIELDS = ("cond", "min", "usbd", "bid_begin", "bid_end", "status", "status_nm", "ratio", "appraisal", "rounds", "nego", "modified", "land", "bld", "evict", "rent", "rent_period", "flags", "name")
@@ -69,17 +72,25 @@ def enrich(st, budget, now):
     todo = sorted([it for it in live if not it["detail"] and it.get("detail_miss", 0) < 3], key=prio)
     todo += [it for it in live if it["detail"] and it.get("modified") and it["modified"] > it.get("detail_mdfcn", "")]   # 변경분 재보강은 맨 뒤
     done = miss = fail = 0
-    for it in todo[:budget]:
-        try:
-            rs, _ = O.call("rlst_detail", cltrMngNo=it["id"], pbctCdtnNo=it["cond"])
-        except O.ApiError as e:
-            fail += 1
-            if "승인" in str(e) or fail > 20: print("  상세 중단:", e); break
-            continue
-        if not rs:
-            miss += 1; it["detail_miss"] = it.get("detail_miss", 0) + 1; continue
-        merged = merge_detail(it, rs[0]); merged["detail_mdfcn"] = it.get("modified", ""); st["items"][it["id"]] = merged; done += 1
-    print("  상세 보강 %d건 (데이터 없음 %d, 오류 %d, 대기 %d건)" % (done, miss, fail, max(0, len(todo) - done - miss - fail)))
+    batch = todo[:budget]
+    t0 = time.time()
+    def one(it):
+        try: return it, O.call("rlst_detail", cltrMngNo=it["id"], pbctCdtnNo=it["cond"])[0], None
+        except O.ApiError as e: return it, None, e
+    stop = False
+    with concurrent.futures.ThreadPoolExecutor(DETAIL_THREADS) as ex:
+        for n, (it, rs, err) in enumerate(ex.map(one, batch), 1):
+            if err is not None:
+                fail += 1
+                if "승인" in str(err) or fail > 20:
+                    print("  상세 중단:", err, flush=True); stop = True
+            elif not rs:
+                miss += 1; it["detail_miss"] = it.get("detail_miss", 0) + 1
+            else:
+                merged = merge_detail(it, rs[0]); merged["detail_mdfcn"] = it.get("modified", ""); st["items"][it["id"]] = merged; done += 1
+            if n % 100 == 0: print("  ... 상세 %d/%d (%.0f초)" % (n, len(batch), time.time() - t0), flush=True)
+            if stop: break
+    print("  상세 보강 %d건 (데이터 없음 %d, 오류 %d, 대기 %d건, %.0f초)" % (done, miss, fail, max(0, len(todo) - done - miss - fail), time.time() - t0), flush=True)
 
 STAT_REGION = {"0021": "압류재산", "0024": "국유재산", "0025": "수탁·유입자산", "0026": "공유재산"}
 STAT_USAGE = {"0041": "압류재산", "0044": "국유재산", "0045": "수탁·유입자산", "0046": "공유재산"}
