@@ -180,3 +180,11 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 ul.tips { margin: 8px 0 14px 20px; line-height: 1.8; } ul.tips li { margin-bottom: 6px; }
 dl.gl dt { font-weight: 800; margin-top: 14px; } dl.gl dd { margin: 2px 0 0 0; color: #374151; }
 @media (max-width: 560px) { .item-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } .item-card .t { font-size: .88rem; } .item-card .p2 { font-size: .88rem; } .item-card .ib { padding: 8px 10px 10px; } }
+.badge.amber { background: #FEF3C7; color: #92400E; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 150px; margin: 14px 0 4px; padding: 6px 4px 0; border-bottom: 1px solid var(--border); }
+.bars .bar { flex: 1; min-width: 18px; height: 100%; position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.bars .fill { width: 100%; background: linear-gradient(180deg, #60A5FA, #2563EB); border-radius: 4px 4px 0 0; }
+.bars .bar b { position: absolute; top: -2px; font-size: .68rem; color: #374151; background: transparent; }
+.bars .bar span { position: absolute; bottom: -20px; font-size: .68rem; color: #6B7280; }
+.bars { margin-bottom: 26px; }
+.tbl td > a:only-child { white-space: nowrap; }

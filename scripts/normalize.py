@@ -76,3 +76,50 @@ def norm_detail(d, pb=None, row=None):
     # 입찰금액이 텍스트가 아니면 최저가율
     it["ratio"] = round(it["min"] / it["appraisal"] * 100, 1) if it["min"] and it["appraisal"] else None
     return it
+
+
+# ───────────────────────── 목록(15157207) 행 → item ─────────────────────────
+def _round(r):
+    return {"n": txt(r.get("pbctNsq")), "cond": txt(r.get("pbctCdtnNo")), "b": iso(r.get("cltrBidBgngDt")), "e": iso(r.get("cltrBidEndDt")),
+            "min": num(r.get("lowstBidPrcIndctCont")), "usbd": num(r.get("usbdNft")) or 0, "st": txt(r.get("pbctStatCd")), "stn": txt(r.get("pbctStatNm"))}
+
+
+def norm_list(rows, now_iso):
+    """같은 물건관리번호의 여러 회차 행 → item 하나. now_iso: 'YYYY-MM-DDTHH:MM'(KST).
+    현재 회차 = 아직 끝나지 않은 가장 이른 회차, 없으면 마지막 회차."""
+    rounds = sorted((_round(r) for r in rows), key=lambda x: (x["b"], x["n"]))
+    by_cond = {txt(r.get("pbctCdtnNo")): r for r in rows}
+    cur = next((x for x in rounds if x["e"] >= now_iso), rounds[-1])
+    r = by_cond[cur["cond"]]
+    thumb = txt(r.get("thnlImgUrlAdr"))
+    it = {
+        "id": txt(r.get("cltrMngNo")), "cond": cur["cond"], "name": txt(r.get("onbidCltrNm")), "addr": txt(r.get("onbidCltrNm")), "road": "",
+        "sido": txt(r.get("lctnSdnm")), "sgg": txt(r.get("lctnSggnm")), "emd": txt(r.get("lctnEmdNm")),
+        "lcls": txt(r.get("cltrUsgLclsCtgrNm")), "mcls": txt(r.get("cltrUsgMclsCtgrNm")), "scls": txt(r.get("cltrUsgSclsCtgrNm")),
+        "kind": txt(r.get("prptDivNm")), "disp": txt(r.get("dspsMthodNm")), "org": txt(r.get("orgNm")), "rqst": txt(r.get("rqstOrgNm")),
+        "bid_method": txt(r.get("bidMthodNm")), "compete": txt(r.get("cptnMthodNm")), "bid_div": txt(r.get("bidDivNm")), "total_unit": txt(r.get("totalamtUnpcDivNm")),
+        "land": flt(r.get("landSqms")), "bld": flt(r.get("bldSqms")), "sqms": [],
+        "appraisal": num(r.get("apslEvlAmt")), "min": cur["min"], "first_bid": num(r.get("frstBidPrc")),
+        "usbd": cur["usbd"], "prgn": num(r.get("bidPrgnNft")) or 0,
+        "bid_begin": cur["b"], "bid_end": cur["e"], "open_dt": "", "status": cur["st"], "status_nm": cur["stn"],
+        "fee_rate": flt(r.get("feeRate")),
+        "flags": {"joint": txt(r.get("collbBidPsblYn")), "twtm": txt(r.get("twtmGthrBidPsblYn")), "subst": txt(r.get("subtBidPsblYn")), "elec_grp": txt(r.get("eltrGrprUseYn")), "batch": txt(r.get("batcBidYn")), "share": txt(r.get("pvctTrgtYn"))},
+        "evict": txt(r.get("evcRsbyTrgtCont")), "rent": txt(r.get("rentMthodNm")), "rent_period": txt(r.get("rentPerdCont")),
+        "loc_txt": "", "use_txt": "", "note_txt": "", "etc_txt": "", "cond_txt": "", "valid_txt": "", "qual_txt": "",
+        "thumb": thumb, "photos": [thumb] if thumb else [], "photo360": [], "appraisals": [], "rights": [], "dist": [], "leases": 0, "occupants": 0,
+        "first_pbanc": "", "modified": iso(r.get("mdfcnDt")), "pb": {"no": "", "name": "", "branch": "", "ymd": ""}, "pnu": txt(r.get("ltnoPnu")),
+        "nego": cur["st"] == "0009", "rounds": rounds, "detail": False,
+    }
+    it["ratio"] = round(it["min"] / it["appraisal"] * 100, 1) if it["min"] and it["appraisal"] else None
+    return it
+
+
+def merge_detail(item, d):
+    """상세(15157247)로 목록 item 을 보강. 회차·수집 메타는 유지하고 현재 회차 값은 목록 기준을 따른다."""
+    keep = {k: item[k] for k in ("rounds", "first_seen", "last_seen", "thumb", "nego", "status_nm", "ended_on", "rent", "rent_period") if k in item}
+    new = norm_detail(d)
+    for k in ("cond", "min", "usbd", "bid_begin", "bid_end", "status", "ratio"):
+        if k in item: new[k] = item[k]
+    if not new["photos"] and item.get("photos"): new["photos"] = item["photos"]
+    new.update(keep); new["detail"] = True
+    return new
